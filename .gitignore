@@ -1,0 +1,15 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# User-uploaded profile photos and generated uploads
+/makangaweb/uploads/profile/*
+!/makangaweb/uploads/profile/.htaccess
+
+# Local editor, operating system, and runtime files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+*.log
