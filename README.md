@@ -32,7 +32,7 @@ Password reset email requires a working PHP mail transport. Configure the `APP_B
 
 ### Deploying on Vercel
 
-The root `Dockerfile` runs the PHP/Apache application in Vercel's Container Runtime. In Vercel, import the GitHub repository, use the repository root as the project root (not the `makangaweb/` subdirectory), and select the **Container** framework preset if it is not selected automatically. The Container Runtime is currently in beta.
+The root `Dockerfile.vercel` selects Vercel's Container Runtime and runs the PHP/Apache application. In Vercel, use the repository root as the project root (not the `makangaweb/` subdirectory) and set the framework preset to **Container** if Vercel does not select it automatically. The Container Runtime is currently in beta.
 
 The app requires a separate, persistent MySQL or MariaDB database; do not run the local XAMPP database inside the Vercel container. Create a fresh database and import `makangaweb/database/database.sql` once. **That setup file drops and recreates `makangaweb_db`; never import it into a database containing data you need.**
 
