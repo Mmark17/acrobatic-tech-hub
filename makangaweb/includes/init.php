@@ -22,6 +22,38 @@ function money($amount)
     return 'UGX ' . number_format((float)$amount);
 }
 
+function normalize_phone($phone)
+{
+    $phone = preg_replace('/[\s-]+/', '', trim($phone));
+    $digits = preg_replace('/\D/', '', $phone);
+
+    if (strlen($digits) === 10 && $digits[0] === '0') {
+        return '+256' . substr($digits, 1);
+    }
+    if (strlen($digits) === 12 && str_starts_with($digits, '256')) {
+        return '+' . $digits;
+    }
+
+    return (str_starts_with($phone, '+') ? '+' : '') . $digits;
+}
+
+function phone_in_use($conn, $phone, $exclude_user_id = null)
+{
+    $phone = normalize_phone($phone);
+    $users = q_all($conn, "SELECT user_id, phone FROM users WHERE phone IS NOT NULL AND phone <> ''");
+
+    foreach ($users as $user) {
+        if (
+            ($exclude_user_id === null || (int)$user['user_id'] !== (int)$exclude_user_id)
+            && normalize_phone($user['phone']) === $phone
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function project_icon($title)
 {
     $title = strtolower($title);

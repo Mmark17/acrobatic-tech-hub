@@ -24,7 +24,8 @@ CREATE TABLE users (
     profile_photo VARCHAR(255) NULL,
     password    VARCHAR(255) NOT NULL,          -- store password_hash() output
     role        ENUM('admin','client') NOT NULL DEFAULT 'client',
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_users_phone (phone)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------
@@ -87,6 +88,24 @@ CREATE TABLE enrolments (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------
+-- 4a. payments (course deposits submitted for verification)
+-- -----------------------------------------------------
+CREATE TABLE payments (
+    payment_id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    enrol_id             INT NOT NULL,
+    amount               DECIMAL(10,2) NOT NULL,
+    payment_method       ENUM('Mobile Money','Bank Transfer','Cash') NOT NULL,
+    transaction_reference VARCHAR(100) NULL,
+    status               ENUM('Pending','Confirmed','Rejected') NOT NULL DEFAULT 'Pending',
+    created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at         DATETIME NULL,
+    KEY idx_payments_enrol_created (enrol_id, created_at),
+    CONSTRAINT fk_payments_enrolment
+        FOREIGN KEY (enrol_id) REFERENCES enrolments (enrol_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
 -- 5. messages (Contact page form submissions)
 -- -----------------------------------------------------
 CREATE TABLE messages (
@@ -97,6 +116,37 @@ CREATE TABLE messages (
     message     TEXT NOT NULL,
     sent_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+CREATE TABLE message_replies (
+    reply_id    BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    message_id  INT NOT NULL,
+    admin_id    INT NULL,
+    reply_body  TEXT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_message_replies_message_created (message_id, created_at),
+    CONSTRAINT fk_message_replies_message
+        FOREIGN KEY (message_id) REFERENCES messages (message_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_message_replies_admin
+        FOREIGN KEY (admin_id) REFERENCES users (user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notifications (
+    notification_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    reply_id        BIGINT UNSIGNED NOT NULL,
+    read_at         DATETIME NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_notifications_user_reply (user_id, reply_id),
+    KEY idx_notifications_user_unread (user_id, read_at, created_at),
+    CONSTRAINT fk_notifications_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_notifications_reply
+        FOREIGN KEY (reply_id) REFERENCES message_replies (reply_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------
 -- 6. business demo requests and their item snapshots

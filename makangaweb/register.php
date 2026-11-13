@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!preg_match('/^[0-9+\s-]{9,15}$/', $old['phone'])) {
         $errors[] = 'Enter a valid phone number.';
     }
+    $phone = normalize_phone($old['phone']);
     if (strlen($password) < 8 || !preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
         $errors[] = 'Password must be at least 8 characters and include letters and numbers.';
     }
@@ -41,6 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($taken) {
             $errors[] = 'An account with that email already exists. Try logging in.';
         }
+        if (phone_in_use($conn, $phone)) {
+            $errors[] = 'That phone number is already registered. Use a different number.';
+        }
     }
 
     if (!$errors) {
@@ -50,12 +54,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn,
                 "INSERT INTO users (full_name, email, phone, password, role) VALUES (?, ?, ?, ?, 'client')",
                 'ssss',
-                [$old['full_name'], $old['email'], $old['phone'], $hash]
+                [$old['full_name'], $old['email'], $phone, $hash]
             );
-            flash('success', 'Account created! You can now log in.');
+            flash('success', 'Welcome, ' . $old['full_name'] . '! Thank you for joining Acrobatic Tech Hub. You can now log in.');
             redirect('login.php');
         } catch (mysqli_sql_exception $ex) {
-            $errors[] = 'We could not create your account. The email may already be registered.';
+            if ((int)$ex->getCode() === 1062) {
+                $errors[] = 'That email or phone number is already registered.';
+            } else {
+                throw $ex;
+            }
         }
     }
 }

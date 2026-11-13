@@ -186,6 +186,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('success', 'Message deleted.');
             break;
 
+        case 'reply_message':
+            $anchor = '#messages';
+            $id = filter_var($_POST['message_id'] ?? null, FILTER_VALIDATE_INT);
+            $replyInput = $_POST['reply'] ?? null;
+            $reply = is_string($replyInput) ? trim($replyInput) : '';
+            if ($id === false || $id < 1 || !is_string($replyInput) || $reply === '' || mb_strlen($reply) > 10000) {
+                flash('error', 'Enter a reply of no more than 10,000 characters.');
+                break;
+            }
+
+            $message = q_one($conn, 'SELECT name, email, subject FROM messages WHERE message_id = ?', 'i', [$id]);
+            if (!$message) {
+                flash('error', 'The message could not be found.');
+                break;
+            }
+            try {
+                $conn->begin_transaction();
+                q_exec(
+                    $conn,
+                    'INSERT INTO message_replies (message_id, admin_id, reply_body) VALUES (?, ?, ?)',
+                    'iis',
+                    [$id, $uid, $reply]
+                );
+                $replyId = (int)$conn->insert_id;
+                $recipient = q_one($conn, 'SELECT user_id FROM users WHERE email = ?', 's', [$message['email']]);
+                if ($recipient) {
+                    q_exec(
+                        $conn,
+                        'INSERT INTO notifications (user_id, reply_id) VALUES (?, ?)',
+                        'ii',
+                        [(int)$recipient['user_id'], $replyId]
+                    );
+                }
+                $conn->commit();
+            } catch (mysqli_sql_exception $ex) {
+                $conn->rollback();
+                error_log('Contact message reply could not be saved: ' . $ex->getMessage());
+                flash('error', 'The reply could not be saved. Please try again.');
+                break;
+            }
+
+            $mailSent = false;
+            $fromAddress = (string)getenv('MAIL_FROM_ADDRESS');
+            if (filter_var($message['email'], FILTER_VALIDATE_EMAIL) && filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
+                $originalSubject = trim(preg_replace('/[\r\n]+/', ' ', (string)$message['subject']));
+                $subject = $originalSubject === '' ? 'Reply from Acrobatic Tech Hub' : 'Re: ' . $originalSubject;
+                $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+                $body = "Hello {$message['name']},\n\n"
+                    . $reply
+                    . "\n\nRegards,\nAcrobatic Tech Hub";
+                $headers = [
+                    'From' => $fromAddress,
+                    'Reply-To' => $fromAddress,
+                    'Content-Type' => 'text/plain; charset=UTF-8',
+                    'X-Mailer' => 'PHP/' . PHP_VERSION,
+                ];
+                $mailSent = mail($message['email'], $encodedSubject, $body, $headers);
+                if (!$mailSent) {
+                    error_log('Contact message reply email could not be sent.');
+                }
+            }
+
+            if ($recipient && !$mailSent) {
+                flash('success', 'Reply saved. The user can read it from their notification bell.');
+            } elseif ($mailSent) {
+                flash('success', 'Reply saved and emailed to ' . $message['email'] . '.');
+            } else {
+                flash('success', 'Reply saved, but email is not configured and no registered account matches the sender.');
+            }
+            break;
+
         case 'update_demo_request_status':
             $anchor = '#demo-requests';
             $id = filter_var($_POST['request_id'] ?? null, FILTER_VALIDATE_INT);
@@ -441,7 +512,17 @@ include __DIR__ . '/includes/header.php';
                     <tr>
                         <td><strong><?= e($m['name']) ?></strong><br><a href="mailto:<?= e($m['email']) ?>"><?= e($m['email']) ?></a></td>
                         <td><?= e($m['subject'] ?: '(no subject)') ?></td>
-                        <td style="min-width:240px"><?= nl2br(e($m['message'])) ?></td>
+                        <td style="min-width:240px">
+                            <?= nl2br(e($m['message'])) ?>
+                            <form method="post" action="dashboard.php#messages" style="margin-top:.8rem">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="reply_message">
+                                <input type="hidden" name="message_id" value="<?= (int)$m['message_id'] ?>">
+                                <label class="sr-only" for="reply-<?= (int)$m['message_id'] ?>">Reply to <?= e($m['name']) ?></label>
+                                <textarea id="reply-<?= (int)$m['message_id'] ?>" name="reply" rows="3" maxlength="10000" placeholder="Write a reply to this message..." required></textarea>
+                                <button type="submit" class="btn btn-sm btn-primary" style="margin-top:.4rem">Send reply</button>
+                            </form>
+                        </td>
                         <td><?= e(date('j M Y, H:i', strtotime($m['sent_at']))) ?></td>
                         <td>
                             <form method="post" action="dashboard.php" data-confirm="Delete this message?">

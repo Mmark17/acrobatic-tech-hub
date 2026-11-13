@@ -100,9 +100,21 @@ document.addEventListener('DOMContentLoaded', function () {
     var login = document.getElementById('loginForm');
     if (login) {
         function clearLoginFields() {
-            login.elements['email'].value = '';
-            login.elements['password'].value = '';
+            ['email', 'password'].forEach(function (name) {
+                var input = login.elements[name];
+                input.value = '';
+                input.readOnly = true;
+            });
         }
+
+        ['email', 'password'].forEach(function (name) {
+            login.elements[name].addEventListener('focus', function () {
+                if (this.readOnly) {
+                    this.value = '';
+                    this.readOnly = false;
+                }
+            });
+        });
 
         clearLoginFields();
         window.addEventListener('pageshow', clearLoginFields);

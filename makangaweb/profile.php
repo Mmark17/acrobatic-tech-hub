@@ -13,6 +13,10 @@ if (!$user) {
     redirect('logout.php');
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    q_exec($conn, 'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL', 'i', [$uid]);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -29,12 +33,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!preg_match('/^[0-9+\s-]{9,15}$/', $phone)) {
             $errors[] = 'Enter a valid phone number.';
+        } else {
+            $phone = normalize_phone($phone);
+        }
+        if (phone_in_use($conn, $phone, $uid)) {
+            $errors[] = 'That phone number is already registered. Use a different number.';
         }
         if (!$errors) {
-            q_exec($conn, 'UPDATE users SET full_name = ?, phone = ? WHERE user_id = ?', 'ssi', [$name, $phone, $uid]);
-            $_SESSION['full_name'] = $name;
-            flash('success', 'Your profile has been updated.');
-            redirect('profile.php');
+            try {
+                q_exec($conn, 'UPDATE users SET full_name = ?, phone = ? WHERE user_id = ?', 'ssi', [$name, $phone, $uid]);
+                $_SESSION['full_name'] = $name;
+                flash('success', 'Your profile has been updated.');
+                redirect('profile.php');
+            } catch (mysqli_sql_exception $ex) {
+                if ((int)$ex->getCode() === 1062) {
+                    $errors[] = 'That phone number is already registered. Use a different number.';
+                } else {
+                    throw $ex;
+                }
+            }
         }
     } elseif ($action === 'update_photo') {
         $upload = $_FILES['profile_photo'] ?? null;
@@ -144,7 +161,30 @@ $enrolments = q_all(
     'i',
     [$uid]
 );
+$payments = q_all(
+    $conn,
+    'SELECT p.amount, p.payment_method, p.transaction_reference, p.status, p.created_at, t.title
+     FROM payments p
+     JOIN enrolments e ON e.enrol_id = p.enrol_id
+     JOIN trainings t ON t.training_id = e.training_id
+     WHERE e.user_id = ?
+     ORDER BY p.created_at DESC',
+    'i',
+    [$uid]
+);
 $my_messages = q_all($conn, 'SELECT subject, message, sent_at FROM messages WHERE email = ? ORDER BY sent_at DESC LIMIT 5', 's', [$user['email']]);
+$my_replies = q_all(
+    $conn,
+    'SELECT r.reply_id, r.reply_body, r.created_at, m.subject, m.message
+     FROM notifications n
+     JOIN message_replies r ON r.reply_id = n.reply_id
+     JOIN messages m ON m.message_id = r.message_id
+     WHERE n.user_id = ?
+     ORDER BY r.created_at DESC
+     LIMIT 20',
+    'i',
+    [$uid]
+);
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -257,6 +297,29 @@ include __DIR__ . '/includes/header.php';
                 <?php endif; ?>
             </section>
 
+            <?php if ($payments): ?>
+            <section>
+                <h2 style="font-size:1.4rem">My course deposits</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Course</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Submitted</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($payments as $payment): ?>
+                            <tr>
+                                <td><strong><?= e($payment['title']) ?></strong></td>
+                                <td><?= e(money($payment['amount'])) ?></td>
+                                <td><?= e($payment['payment_method']) ?></td>
+                                <td><?= e($payment['transaction_reference'] ?: 'Not provided') ?></td>
+                                <td><?= e($payment['status']) ?></td>
+                                <td><?= e(date('j M Y', strtotime($payment['created_at']))) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <?php endif; ?>
+
             <?php if ($my_messages): ?>
             <section>
                 <h2 style="font-size:1.4rem">My recent messages</h2>
@@ -273,6 +336,22 @@ include __DIR__ . '/includes/header.php';
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if ($my_replies): ?>
+            <section id="replies">
+                <h2 style="font-size:1.4rem">Replies to your messages</h2>
+                <div class="stack">
+                    <?php foreach ($my_replies as $reply): ?>
+                        <article class="card" id="reply-<?= (int)$reply['reply_id'] ?>">
+                            <p><strong>Regarding: <?= e($reply['subject'] ?: '(no subject)') ?></strong></p>
+                            <p class="muted"><?= nl2br(e($reply['message'])) ?></p>
+                            <div class="alert alert-success"><?= nl2br(e($reply['reply_body'])) ?></div>
+                            <small class="muted">Reply received <?= e(date('j M Y, H:i', strtotime($reply['created_at']))) ?></small>
+                        </article>
+                    <?php endforeach; ?>
                 </div>
             </section>
             <?php endif; ?>

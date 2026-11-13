@@ -64,8 +64,8 @@ include __DIR__ . '/includes/header.php';
             <p class="muted">Get in touch with our team by phone or send a message using the form.</p>
 
             <div class="info-item"><div class="icon">&#128205;</div><div><b>Address</b><span class="muted">Soroti City, Teso Sub-region, Uganda</span></div></div>
-            <div class="info-item"><div class="icon">&#128222;</div><div><b>Phone / WhatsApp</b><span class="muted">+256 700 000 000</span></div></div>
-            <div class="info-item"><div class="icon">&#9993;</div><div><b>Email</b><span class="muted">info@makangaweb.example</span></div></div>
+            <div class="info-item"><div class="icon">&#128222;</div><div><b>Phone / WhatsApp</b><a class="muted" href="tel:+256788654758">0788654758</a></div></div>
+            <div class="info-item"><div class="icon">&#9993;</div><div><b>Email</b><a class="muted" href="mailto:kennedymarkmakanga@gmail.com">kennedymarkmakanga@gmail.com</a></div></div>
             <div class="info-item"><div class="icon">&#128339;</div><div><b>Working hours</b><span class="muted">Monday - Saturday, 8:00 AM - 6:00 PM</span></div></div>
         </div>
 
